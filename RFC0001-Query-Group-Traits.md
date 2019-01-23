@@ -14,12 +14,11 @@ User's will declare query groups by decorating a trait:
 ```rust
 #[salsa::query_group]
 trait MyGroup<P0..Pn> where WC {
-  // Inputs are declared as a pair of a getter and a setter.
-  //
-  // Setters have `&mut self` and must have a name `set_X` where `X` is the name of
-  // some other `&self` method (and of course the keys/values must have compatible types).
+  // Inputs are annotated with `#[salsa::input]`. The final trait will include
+  // a `set_my_input(&mut self, key: K1, value: V1)` method automatically added,
+  // as well as a `remove_my_input` method
+  #[salsa::input]
   fn my_input(&self, key: K1) -> V1;
-  fn set_my_input(&mut self, key: K1, value: V1);
   
   // "Derived" queries are just a getter.
   fn my_query(&self, key: K2) -> V2;
@@ -49,12 +48,17 @@ later to permit such customization.
   
 ### Controlling query modes
 
+Input queries, as described in the trait, are specified via the
+`#[salsa::input]` attribute.
+
 Derived queries can be customized by the following attributes,
 attached to the getter method (e.g., `fn my_query(..)`):
 
 - `#[salsa::invoke(foo::bar)]` specifies the path to the function to invoke
   when the query is called (default is `my_query`).
 - `#[salsa::volatile]` specifies a "volatile" query, which is assumed to
+  read untracked input and hence must be re-executed on every revision.
+- `#[salsa::dependencies]` specifies a "dependencies-only" query, which is assumed to
   read untracked input and hence must be re-executed on every revision.
 
 ## Creating the database
