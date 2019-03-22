@@ -29,8 +29,8 @@ further structures within them (such as fields or methods). This gives
 rise to a path like so that can be used to identify a given item:
 
 ```
-Path = <file-name>
-     | Path / <identifier>
+PathData = <file-name>
+         | PathData / <identifier>
 ```
 
 These paths *could* be represented in the compiler with an `Arc`, but
@@ -93,7 +93,7 @@ You can declare an interned query like so:
 #[salsa::query_group]
 trait Foo {
   #[salsa::interned]
-  fn intern_path(&self, key: Path) -> u32;
+  fn intern_path_data(&self, data: PathData) -> u32;
 ]
 ```
 
@@ -113,13 +113,90 @@ would be `fn lookup_intern_path(&self, key: u32) -> Path`.
 
 ## Using an interned query
 
+Using an interned query is quite straightforward. You simply invoke it
+with a key, and you will get back an integer, and you can use the
+generated `lookup` method to convert back to the original value:
+
+```rust
+let key = db.intern_path(path_data1);
+let path_data2 = db.lookup_intern_path_data(key);
+```
+
+Note that the interned value will be cloned -- so, like all Salsa
+values, it is best if that is a cheap operation. Interestingly,
+interning can help to keep recursive, tree-shapes values cheap,
+because the "pointers" within can be replaced with interned keys.
+
+## Custom return types
+
+The return type for an intern query does not have to be a `u32`. It can
+be any type that implements the `salsa::InternKey` trait:
+
+```rust
+pub trait InternKey {
+    /// Create an instance of the intern-key from a `u32` value.
+    fn from_u32(v: u32) -> Self;
+
+    /// Extract the `u32` with which the intern-key was created.
+    fn as_u32(&self) -> u32;
+}
+```
+
+### Recommended practice
+
+It is recommended to create a custom struct type for every interned
+key.  A typical naming convention is to name the *intern key* `Foo`
+and the key's associated data `FooData`. So, for `PathData`, our
+intern key might be:
+
+```rust
+pub struct Path(u32);
+
+impl salsa::InternKey {
+    fn from_u32(v: u32) -> Self {
+        Path(v)
+    }
+
+    fn as_u32(v: u32) -> Self {
+        v.0
+    }
+}
+
+impl Path {
+    // Adding this method is often convenient, since you can then
+    // write `path.lookup(db)` to access the data, which reads a bit better.
+    pub fn lookup(db: &impl MyDatabase) -> PathData {
+        db.lookup_intern_path_data(self)
+    }
+}
+```
+
 ## Interaction with the garbage collector
+
+Interned keys can be garbage collected as normal, with one
+caveat. Even if requested, Salsa will never collect the results
+generated in the current revision. This is because it would permit the
+same key to be interned twice in the same revision, possibly mapping
+to distinct intern keys each time.
+
+Note that if an interned key *is* collected, its index will be
+re-used.  Salsa's dependency tracking system should ensure that
+anything incorporating the older value is considered dirty, but you
+may see the same index showing up more than once in the logs.
 
 # Reference guide
 
-Describe implementation details or other things here.
+Interned keys are implemented using a hash-map that maps from the
+interned data to its index, as well as a vector containing (for each
+index) various bits of data. In addition to the interned data, we must
+track the revision in which the value was interned and the revision in
+which it was last accessed, to help manage the interaction with the
+GC. Finally, we have to track some sort of free list that tracks the
+keys that are being re-used. The current implementation never actually
+shrinks the vectors and maps from their maximum size, but this might
+be a useful thing to be able to do (this is effectively a memory
+allocator, so standard allocation strategies could be used here).
 
 # Alternatives and future work
 
-Various downsides, rejected approaches, or other considerations.
-
+None at present.
