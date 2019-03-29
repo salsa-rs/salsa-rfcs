@@ -85,6 +85,8 @@ collection mechanisms.
 
 # User's guide
 
+This section covers how interned queries are expected to be used.
+
 ## Declaring an interned query
 
 You can declare an interned query like so:
@@ -111,7 +113,7 @@ a reverse query that will invert the interning step. It is named
 `lookup_XXX`, where `XXX` is the name of the query. Hence here it
 would be `fn lookup_intern_path(&self, key: u32) -> Path`.
 
-## Using an interned query
+## The expected us
 
 Using an interned query is quite straightforward. You simply invoke it
 with a key, and you will get back an integer, and you can use the
@@ -142,12 +144,24 @@ pub trait InternKey {
 }
 ```
 
-### Recommended practice
+## Recommended practice
 
-It is recommended to create a custom struct type for every interned
-key.  A typical naming convention is to name the *intern key* `Foo`
-and the key's associated data `FooData`. So, for `PathData`, our
-intern key might be:
+This section shows the recommended practice for using interned keys,
+building on the `Path` and `PathData` example that we've been working
+with. 
+
+### Naming Convention
+
+First, note the recommended naming convention: the *intern key* is
+`Foo` and the key's associated data `FooData` (in our case, `Path` and
+`PathData`). The intern key is given the shorter name because it is
+used far more often. Moreover, other types should never store the full
+data, but rather should store the interned key.
+
+### Defining the intern key
+
+The intern key should always be a newtype struct that implements
+the `InternKey` trait. So, something like this:
 
 ```rust
 pub struct Path(u32);
@@ -161,13 +175,58 @@ impl salsa::InternKey {
         v.0
     }
 }
+```
 
+### Convenient lookup method
+
+It is often convenient to add a `lookup` method to the newtype key:
+
+```rust
 impl Path {
     // Adding this method is often convenient, since you can then
     // write `path.lookup(db)` to access the data, which reads a bit better.
     pub fn lookup(db: &impl MyDatabase) -> PathData {
         db.lookup_intern_path_data(self)
     }
+}
+```
+
+### Defining the data type
+
+Recall that our paths were defined by a recursive grammar like so:
+
+```
+PathData = <file-name>
+         | PathData / <identifier>
+```
+
+This recursion is quite typical of salsa applications. The recommended
+way to encode it in the `PathData` structure itself is to build on other
+intern keys, like so:
+
+```rust
+#[derive(Clone, Hash, Eq, ..)]
+enum PathData {
+  Root(String),
+  Child(Path, String),
+  //    ^^^^ Note that the recursive reference here
+  //         is encoded as a Path.
+}
+```
+
+In general, however, you may wish to avoid types like `String` that
+carry owned data. They make the data structure more expensive to
+clone, and -- if duplicated -- represent a waste of memory.  Instead,
+the strings themselves could be interned -- let's call the key `Text`
+for now. Doing so would avoid redundancies and also make `PathData`
+able to be defined as a `Copy` type, which is convenient:
+
+```rust
+#[derive(Copy, Clone, Hash, Eq, ..)]
+enum PathData {
+  Root(Text),
+  Child(Path, Text),
+  //          ^^^^ interned string type
 }
 ```
 
