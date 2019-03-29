@@ -214,21 +214,11 @@ enum PathData {
 }
 ```
 
-In general, however, you may wish to avoid types like `String` that
-carry owned data. They make the data structure more expensive to
-clone, and -- if duplicated -- represent a waste of memory.  Instead,
-the strings themselves could be interned -- let's call the key `Text`
-for now. Doing so would avoid redundancies and also make `PathData`
-able to be defined as a `Copy` type, which is convenient:
-
-```rust
-#[derive(Copy, Clone, Hash, Eq, ..)]
-enum PathData {
-  Root(Text),
-  Child(Path, Text),
-  //          ^^^^ interned string type
-}
-```
+Note though that the `PathData` type will be cloned whenever the value
+for an interned key is looked up, and it may also be cloned to store
+dependency information between queries. So, as an optimization, you
+might prefer to avoid `String` in favor of `Arc<String>` -- or even
+intern the strings as well.
 
 ## Interaction with the garbage collector
 
