@@ -2,16 +2,16 @@
 
 - We introduce `#[salsa::interned]` queries which convert a `Key` type
   into a numeric index of type `Value`, where `Value` is either the
-  type `RawId` (defined by a salsa) or some newtype thereof.
+  type `InternId` (defined by a salsa) or some newtype thereof.
 - Each interned query `foo` also produces an inverse `lookup_foo`
   method that converts back from the `Value` to the `Key` that was
   interned.
-- The `RawId` type (defined by salsa) is basically a newtype'd integer,
+- The `InternId` type (defined by salsa) is basically a newtype'd integer,
   but it internally uses `NonZeroU32` to enable space-saving optimizations
   in memory layout.
 - The `Value` types can be any type that implements the
   `salsa::InternIndex` trait, also introduced by this RFC. This trait
-  has two methods, `from_raw_id` and `as_raw_id`.
+  has two methods, `from_intern_id` and `as_intern_id`.
 - The interning is integrated into the GC and tracked like any other
   query, which means that interned values can be garbage-collected,
   and any computation that was dependent on them will be collected.
@@ -98,7 +98,7 @@ You can declare an interned query like so:
 #[salsa::query_group]
 trait Foo {
   #[salsa::interned]
-  fn intern_path_data(&self, data: PathData) -> salsa::RawId;
+  fn intern_path_data(&self, data: PathData) -> salsa::InternId;
 ]
 ```
 
@@ -109,12 +109,12 @@ value. In order to be interned, the keys must implement `Clone`,
 
 **Return type.** The return type of an interned key may be of any type
 that implements `salsa::InternIndex`: salsa provides an impl for the
-type `salsa::RawId`, but you can implement it for your own.
+type `salsa::InternId`, but you can implement it for your own.
 
 **Inverse query.** For each interning query, we automatically generate
 a reverse query that will invert the interning step. It is named
 `lookup_XXX`, where `XXX` is the name of the query. Hence here it
-would be `fn lookup_intern_path(&self, key: salsa::RawId) -> Path`.
+would be `fn lookup_intern_path(&self, key: salsa::InternId) -> Path`.
 
 ## The expected us
 
@@ -134,16 +134,16 @@ because the "pointers" within can be replaced with interned keys.
 
 ## Custom return types
 
-The return type for an intern query does not have to be a `RawId`. It can
+The return type for an intern query does not have to be a `InternId`. It can
 be any type that implements the `salsa::InternKey` trait:
 
 ```rust
 pub trait InternKey {
-    /// Create an instance of the intern-key from a `RawId` value.
-    fn from_raw_id(v: RawId) -> Self;
+    /// Create an instance of the intern-key from a `InternId` value.
+    fn from_intern_id(v: InternId) -> Self;
 
-    /// Extract the `RawId` with which the intern-key was created.
-    fn as_raw_id(&self) -> RawId;
+    /// Extract the `InternId` with which the intern-key was created.
+    fn as_intern_id(&self) -> InternId;
 }
 ```
 
@@ -167,14 +167,14 @@ The intern key should always be a newtype struct that implements
 the `InternKey` trait. So, something like this:
 
 ```rust
-pub struct Path(RawId);
+pub struct Path(InternId);
 
-impl salsa::InternKey {
-    fn from_raw_id(v: RawId) -> Self {
+impl salsa::InternKey for Path {
+    fn from_intern_id(v: InternId) -> Self {
         Path(v)
     }
 
-    fn as_raw_id(&self) -> RawId {
+    fn as_intern_id(&self) -> InternId {
         v.0
     }
 }
@@ -249,20 +249,20 @@ shrinks the vectors and maps from their maximum size, but this might
 be a useful thing to be able to do (this is effectively a memory
 allocator, so standard allocation strategies could be used here).
 
-## RawId
+## InternId
 
-Presently the `RawId` type is implemented to wrap a `NonZeroU32`:
+Presently the `InternId` type is implemented to wrap a `NonZeroU32`:
 
 ```rust
-pub struct RawId {
+pub struct InternId {
     value: NonZeroU32,
 }
 ```
 
-This means that `Option<RawId>` (or `Option<Path>`, continuing our
+This means that `Option<InternId>` (or `Option<Path>`, continuing our
 example from before) will only be a single word. To accommodate this,
-the `RawId` constructors require that the value is less than
-`RawId::MAX`; the value is deliberately set low (currently to
+the `InternId` constructors require that the value is less than
+`InternId::MAX`; the value is deliberately set low (currently to
 `0xFFFF_FF00`) to allow for more sentinel values in the future (Rust
 doesn't presently expose the capability of having sentinel values
 other than zero on stable, but it is possible on nightly).
