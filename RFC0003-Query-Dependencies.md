@@ -33,7 +33,9 @@ introducing and undesired dependency.
 To specify query dependencies, a `requires` clause should be used:
 
 ```rust
-#[salsa::query_group(SymbolsDatabaseStorage, requires = "SyntaxDatabase + EnvDatabase")]
+#[salsa::query_group(SymbolsDatabaseStorage)]
+#[salsa::requires(SyntaxDatabase)]
+#[salsa::requires(EnvDatabase)]
 pub trait SymbolsDatabase {
     fn get_symbol_by_name(&self, name: String) -> Symbol;
 }
