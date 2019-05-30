@@ -30,7 +30,7 @@ introducing and undesired dependency.
 
 # User's guide
 
-To specify query dependencies, a `requires` clause should be used:
+To specify query dependencies, a `requires` attribute should be used:
 
 ```rust
 #[salsa::query_group(SymbolsDatabaseStorage)]
@@ -41,8 +41,8 @@ pub trait SymbolsDatabase {
 }
 ```
 
-The value of `requires` is a `+` separated list of traits, like the one you would
-write in a `where` clause. These traits are available when implementing the query:
+The argument of `requires` is a path to a trait. The traits from all `requires`
+attributes are available when implementing the query:
 
 ```rust
 fn get_symbol_by_name(
@@ -63,7 +63,7 @@ fn fuzzy_find_symbol(db: &impl SymbolsDatabase, name: String) {
 
 Note that, while the RFC does not propose to add per-query dependencies, query
 implementation can voluntarily specify only a subset of traits from `requires`
-clause:
+attribute:
 
 ```rust
 fn get_symbol_by_name(
@@ -77,9 +77,9 @@ fn get_symbol_by_name(
 
 # Reference guide
 
-The implementation is straightforward and consists of adding traits from `requires`
-clause to various `where` bounds. For example, we would generate the following
-blanket for above example:
+The implementation is straightforward and consists of adding traits from
+`requires` attributes to various `where` bounds. For example, we would generate
+the following blanket for above example:
 
 ```rust
 impl<T> SymbolsDatabase for T
