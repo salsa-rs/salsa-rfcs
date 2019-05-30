@@ -46,7 +46,7 @@ write in a `where` clause. These traits are available when implementing the quer
 
 ```rust
 fn get_symbol_by_name(
-    db: &impl SymbolsDatabase + SyntaxDatabase + EnvDatabase,
+    db: &(impl SymbolsDatabase + SyntaxDatabase + EnvDatabase),
     name: String,
 ) -> Symbol {
     // ...
@@ -68,7 +68,7 @@ clause:
 ```rust
 fn get_symbol_by_name(
     // Purposefully don't depend on EnvDatabase
-    db: &impl SymbolsDatabase + SyntaxDatabase,
+    db: &(impl SymbolsDatabase + SyntaxDatabase),
     name: String,
 ) -> Symbol {
     // ...
