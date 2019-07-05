@@ -100,12 +100,51 @@ Alternatively, now imagine we had invoked `mir_optimized(bar)` first:
 
 Basically, whichever optimized MIR we compute first includes the body
 of the other function, but not vice versa. Nondeterminstic results
-like this are a problem for salsa. Ad-hoc cycle recovery, however,
-serves as a kind of "footgun" that makes such non-deterministic
-results very easy.
+like this are a problem for salsa. 
+
+In fact, if you think about it, the concept of ad-hoc recovery itself
+*requires* internally inconsistent results. Consider the cycle
+that occurs when `foo` is invoked first:
+
+- `mir_optimized(foo)` invoked
+  - `mir_optimized(bar)` invoked
+    - `mir_optimized(foo)` invoked
+    - `mir_optimized(foo)` returns `Err(CycleError)`
+  - `mir_optimized(bar)` returns `Ok(...)`
+- `mir_optimized(foo)` returns `Ok(...)`
+
+Here, `mir_optimized(foo)` was invoked twice, but once yielded `Err`
+and then later yielded `Ok`.
+
+This leads to a constraint: **no matter where the cycle is "entered",
+all constituents in the cycle will result in the same value.** As we
+have seen, ad-hoc cycle recovery does not permit us to enforce this
+constraint, and in fact serves as a kind of "footgun" that makes such
+non-deterministic results very easy.
 
 (If you'd like to know a way to handle inlining that avoids cycles,
 see the Appendix.)
+
+## Forced cycle recovery avoids these problems
+
+This RFC proposes a simple mechanism of cycle recovery: queries may be
+tagged with a `#[salsa::cycle(<path>)]` attribute. This attribute
+indicates a path `<path>` that leads to another function, called the
+**recovery function**, which will be used to define the result of the
+query if a cycle occurs. If no recovery function is specified, then
+the default recovery function simply panics.
+
+Now, if we are invoking a query `Q` and we detect a cycle:
+
+- Identify the set `[C...]` of participating queries in the cycle.
+- We will discard the ordinary return value of each query in `C` and instead
+  invoke its recovery function to get the result.
+
+If we consider the inlining example, this means that *both*
+`mir_optimized(foo)` and `mir_optimized(bar)` would have their result
+value set to the recovery value. This marks the key difference between
+this mechanism and ad-hoc recovery -- from an external perspective,
+`mir_optimized(foo)` always yields the same recovery value.
 
 # User's guide
 
@@ -121,5 +160,16 @@ Various downsides, rejected approaches, or other considerations.
 
 # Appendix: How to handle error recovery
 
-You may be curious
+You may be curious how to handle cycles when they can legitimately
+occur. Let's consider the case of inlining optimizations described
+earlier. The solution in that case is to create a new query,
+`call_graph`, that constructs a call graph amongst all functions.  We
+can then detect the the strongly connected components (a.k.a., cycles)
+and reduce them to single nodes in the graph, resulting in a DAG. It
+is then possible to traverse this graph and optimize each SCC
+separately. Now, if we see a call from `foo` to `bar`, we check if
+they are within the same SCC -- if so, we cannot inline one into the
+other (or we inline the non-optimized version, etc). If `bar` is not
+in the same SCC as `foo`, we can invoke `mir_optimized(bar)` safely,
+since we know that it cannot reach `foo`.
 
