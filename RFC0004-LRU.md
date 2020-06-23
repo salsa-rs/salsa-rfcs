@@ -32,7 +32,7 @@ The mechanism of LRU targets both of these weaknesses:
 It is possible to call `set_lru_capacity(n)` method on any non-input query. The
 effect of this is that the table for the query stores at most `n` *values* in
 the database. If a new value is computed, and there are already `n` existing
-ones in the database, the lest recently used one is evicted. Note that
+ones in the database, the least recently used one is evicted. Note that
 information about query dependencies is **not** evicted. It is possible to
 change lru capacity at runtime at any time. `n == 0` is a special case, which
 completely disables LRU logic. LRU is not enabled by default.
