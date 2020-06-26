@@ -175,7 +175,7 @@ impl salsa::InternKey for Path {
     }
 
     fn as_intern_id(&self) -> InternId {
-        v.0
+        self.0
     }
 }
 ```
