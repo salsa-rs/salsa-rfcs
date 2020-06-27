@@ -175,7 +175,7 @@ impl salsa::InternKey for Path {
     }
 
     fn as_intern_id(&self) -> InternId {
-        v.0
+        self.0
     }
 }
 ```
@@ -188,8 +188,8 @@ It is often convenient to add a `lookup` method to the newtype key:
 impl Path {
     // Adding this method is often convenient, since you can then
     // write `path.lookup(db)` to access the data, which reads a bit better.
-    pub fn lookup(db: &impl MyDatabase) -> PathData {
-        db.lookup_intern_path_data(self)
+    pub fn lookup(&self, db: &impl MyDatabase) -> PathData {
+        db.lookup_intern_path_data(*self)
     }
 }
 ```
